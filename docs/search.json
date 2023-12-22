@@ -1,0 +1,177 @@
+[
+  {
+    "objectID": "models/sample_train_diabetes_model.html",
+    "href": "models/sample_train_diabetes_model.html",
+    "title": "Sample model training: diabetes dataset classification",
+    "section": "",
+    "text": "This notebook trains a sample model using the diabetes toy problem, and saves a model artifact into this folder.\nimport joblib\nimport numpy as np\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.linear_model import Ridge\nfrom sklearn.metrics import r2_score"
+  },
+  {
+    "objectID": "models/sample_train_diabetes_model.html#download-data",
+    "href": "models/sample_train_diabetes_model.html#download-data",
+    "title": "Sample model training: diabetes dataset classification",
+    "section": "1. Download data",
+    "text": "1. Download data\n\nX, y = load_diabetes(return_X_y=True)\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)\n\nnp.savez(\"../data/diabetes.npz\", X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)"
+  },
+  {
+    "objectID": "models/sample_train_diabetes_model.html#train-model",
+    "href": "models/sample_train_diabetes_model.html#train-model",
+    "title": "Sample model training: diabetes dataset classification",
+    "section": "2. Train model",
+    "text": "2. Train model\n\nX_train, y_train, X_test, y_test = [np.load(\"../data/diabetes.npz\")[x] for x in (\"X_train\", \"y_train\", \"X_test\", \"y_test\")]\n\nalpha=0.1\n\nmodel = Ridge(alpha=alpha).fit(X_train, y_train)"
+  },
+  {
+    "objectID": "models/sample_train_diabetes_model.html#save-model",
+    "href": "models/sample_train_diabetes_model.html#save-model",
+    "title": "Sample model training: diabetes dataset classification",
+    "section": "3. Save model",
+    "text": "3. Save model\n\njoblib.dump(model, \"model.pkl\")\n\n['model.pkl']"
+  },
+  {
+    "objectID": "notebooks/03 - Deploy Azure container instance.html",
+    "href": "notebooks/03 - Deploy Azure container instance.html",
+    "title": "Deploy to Azure Container Instance - “Bring your own container”",
+    "section": "",
+    "text": "Following this tutorial\nSteps:\nModel to be deployed:\nmodel_path = \"../../models/model.pkl\"\nresource_group = \"azure-cognitive-services-accelerator\""
+  },
+  {
+    "objectID": "notebooks/03 - Deploy Azure container instance.html#setup",
+    "href": "notebooks/03 - Deploy Azure container instance.html#setup",
+    "title": "Deploy to Azure Container Instance - “Bring your own container”",
+    "section": "1. Setup",
+    "text": "1. Setup\nFirst, we create an image for a Docker container that wraps our model. Then, we create an Azure Container Registry (ACR) resource and push our Docker image to it.\n\n1.1 Create inference API\nThis can be infinitely configured. Here, inference is performed on the scikit-learn model using a simple FastAPI REST API which exposes the endpoint on /. For example, you could add load balancing by passing traffic through nginx.\n\n%%writefile requirements.txt\nnumpy\nscikit-learn==1.2.0\njoblib\nfastapi\nuvicorn\npydantic\n\n\n%%writefile app.py\nfrom fastapi import FastAPI\nimport joblib, json\nimport numpy as np\nimport sklearn\nfrom pydantic import BaseModel\n\nclass InputData(BaseModel):\n    data: list\n\napp = FastAPI()\n\n@app.post(\"/\")\nasync def root(inputData: InputData):\n    print(inputData)\n    pred = joblib.load('model.pkl').predict(np.array(inputData.dict()['data']))\n    return {\"prediction\": pred.tolist()}\n\n\n\n1.2 Containerise application\nThe Dockerfile gives Docker instructions on how to setup your Docker container’s image and how it should behave at runtime. We use uvicorn to expose the API.\n\n%%writefile Dockerfile\nFROM python:3.10\nWORKDIR /code\nCOPY . /code\nRUN pip install -r /code/requirements.txt --trusted-host pypi.org --trusted-host files.pythonhosted.org\nCMD [\"uvicorn\",\"app:app\",\"--host\", \"0.0.0.0\", \"--port\", \"80\"]\n\nStart Docker locally and run the following command to build your image in the current folder. Docker can be downloaded from here.\n\n!docker build -t sample_project:0.1 .\n\n\n\n1.3 Create ACR resource\n\n!az acr create --resource-group $resource_group --name sampleprojectacr --sku Basic\n\n\n!az acr login --name sampleprojectacr\n\nGet full name of registry login server\n\n!az acr show --name sampleprojectacr --query loginServer --output table\n\n\n\n1.4 Push Docker image\nTag Docker image with details of registry server\n\n!docker tag sample_project:0.1 sampleprojectacr.azurecr.io/sample_project:0.1\n\nPush Docker image to the ACR\n\n!docker push sampleprojectacr.azurecr.io/sample_project:0.1\n\nEnable admin access to ACR as per here\n\n!az acr update -n sampleprojectacr --admin-enabled true"
+  },
+  {
+    "objectID": "notebooks/03 - Deploy Azure container instance.html#deploy-image-from-acr-to-a-container-instance-on-aci",
+    "href": "notebooks/03 - Deploy Azure container instance.html#deploy-image-from-acr-to-a-container-instance-on-aci",
+    "title": "Deploy to Azure Container Instance - “Bring your own container”",
+    "section": "2. Deploy image from ACR to a container instance on ACI",
+    "text": "2. Deploy image from ACR to a container instance on ACI\nYou could do this programmatically with az container create as per the Microsoft tutorials, but this requires configuring credentials of the registry login account. For the demo, it’s much easier to do from the Azure Portal browser interface under Container Instances. Click Create, and set:\n\nResource group: same as above\nContainer name: new unique name\nRegion: uksouth\nImage source: Azure Container Registry\nRegistry: sampleprojectacr\nImage + Image tag: sampleprojectacr.azurecr.io/sample_project:v1\nOptional: set DNS name label under “Networking” for custom URL\n\n\ncontainer_name = \"sampleprojectaci\""
+  },
+  {
+    "objectID": "notebooks/03 - Deploy Azure container instance.html#test-endpoint",
+    "href": "notebooks/03 - Deploy Azure container instance.html#test-endpoint",
+    "title": "Deploy to Azure Container Instance - “Bring your own container”",
+    "section": "3. Test endpoint",
+    "text": "3. Test endpoint\nFind container endpoint IP from Azure portal, or access using the command line:\n\nendpoint_url = !az container show --name $container_name --resource-group $resource_group --query ipAddress.ip\n\n\nendpoint_url = \"http://\" + endpoint_url[0][1:-1]\n\n\nimport requests\nimport json\nimport numpy as np\n\ninput_payload = json.dumps({\n    'data': np.load(\"../data/diabetes.npz\")[\"X_test\"][:2].tolist(),\n})\n\nrequests.post(endpoint_url, input_payload, headers={'Content-Type':'application/json'}).json()"
+  },
+  {
+    "objectID": "notebooks/03 - Deploy Azure container instance.html#delete-container-and-registry",
+    "href": "notebooks/03 - Deploy Azure container instance.html#delete-container-and-registry",
+    "title": "Deploy to Azure Container Instance - “Bring your own container”",
+    "section": "4. Delete container and registry",
+    "text": "4. Delete container and registry\n\n!az container delete --name $container_name --resource-group $resource_group --yes\n\n\n!az acr delete --name sampleprojectacr --resource-group $resource_group --yes\n\n\n!rm app.py\n!rm Dockerfile\n!rm requirements.txt"
+  },
+  {
+    "objectID": "notebooks/01 - Deploy Azure Managed Endpoint.html",
+    "href": "notebooks/01 - Deploy Azure Managed Endpoint.html",
+    "title": "Deploying models to Azure Managed Endpoints using Azure Machine Learning",
+    "section": "",
+    "text": "Following this tutorial. Note that this is the most up-to-date method using the Python SDK v2 azure-ai-ml, and all tutorials using azureml-core (e.g. dp100 or this demo) are outdated, see this blog for more info.\nSteps: 1. Setup Azure Machine Learning workspace and Azure Managed Online Endpoint. 2. Deploy model 3. Test model 4. Delete endpoint\nTake model from:\nmodel_path = \"../models/model.pkl\"\nworkspace = \"azure-ml-deployment-methods\"\nresource_group = \"azure-cognitive-services-accelerator\""
+  },
+  {
+    "objectID": "notebooks/01 - Deploy Azure Managed Endpoint.html#setup",
+    "href": "notebooks/01 - Deploy Azure Managed Endpoint.html#setup",
+    "title": "Deploying models to Azure Managed Endpoints using Azure Machine Learning",
+    "section": "1. Setup",
+    "text": "1. Setup\n\n1.1 Setup Azure Machine Learning\nFirst create a new Azure Machine Learning workspace in the Azure portal.\n\nsubscription_id = !az account show --query id\n\nConnect to Azure ML workspace\n\nfrom azure.ai.ml import MLClient\nfrom azure.identity import DefaultAzureCredential\n\nclient = MLClient(DefaultAzureCredential(), subscription_id[0][1:-1], resource_group, workspace)\n\n\n\n1.2 Setup Azure Managed Online Endpoint\n\nfrom azure.ai.ml.entities import ManagedOnlineEndpoint\n\nendpoint = ManagedOnlineEndpoint(\n    name=\"sample-model-endpoint\",\n    description=\"A sample ML model deployment to Managed Endpoints\",\n    auth_mode=\"key\",\n    tags={'area': 'diabetes', 'type': 'regression'},\n)\n\n\nclient.online_endpoints.begin_create_or_update(endpoint).result()"
+  },
+  {
+    "objectID": "notebooks/01 - Deploy Azure Managed Endpoint.html#deploy-model-to-endpoint",
+    "href": "notebooks/01 - Deploy Azure Managed Endpoint.html#deploy-model-to-endpoint",
+    "title": "Deploying models to Azure Managed Endpoints using Azure Machine Learning",
+    "section": "2. Deploy model to endpoint",
+    "text": "2. Deploy model to endpoint\n\nfrom azure.ai.ml.entities import ManagedOnlineDeployment, Model, Environment, CodeConfiguration\n\nConfigure deployment: select environment and model. Here we use a base Ubuntu image and add conda dependencies.\n\n!mkdir files\n\n\n%%writefile files/inference.py\nimport json, joblib, os\nimport numpy as np\n\ndef init():\n    global model\n    model = joblib.load(os.path.join(os.getenv('AZUREML_MODEL_DIR'), 'model.pkl'))\n\ndef run(raw_data):\n    predictions = model.predict(np.array(json.loads(raw_data)['data'])).tolist()\n    return json.dumps(predictions)\n\n\n%%writefile files/conda.yml\nname: model-env\nchannels:\n  - defaults\ndependencies:\n  - python=3.7\n  - pip\n  - pip:\n    - scikit-learn\n    - joblib\n    - azureml-defaults\n    - inference-schema[numpy-support]\n\n\nmodel = Model(path=\"../models/model.pkl\")\n\nenv = env = Environment(\n    conda_file=\"files/conda.yml\",\n    image=\"mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:latest\",\n)\n\ncode_config = CodeConfiguration(code=\"files\", scoring_script=\"inference.py\")\n\nCreate deployment and connect to endpoint\n\ndeployment = ManagedOnlineDeployment(\n    name=\"blue\",\n    endpoint_name=\"sample-model-endpoint\",\n    model=model,\n    environment=env,\n    code_configuration=code_config,\n    instance_type=\"Standard_DS2_v2\",\n    instance_count=1,\n)\n\nDeploy. This creates a deployment which you can view in Azure Machine Learning Studio/Endpoints/&lt;name&gt;\n\nclient.online_deployments.begin_create_or_update(deployment).result()\n\n\nendpoint.traffic = {\"blue\": 100}\nclient.begin_create_or_update(endpoint)"
+  },
+  {
+    "objectID": "notebooks/01 - Deploy Azure Managed Endpoint.html#test-endpoint",
+    "href": "notebooks/01 - Deploy Azure Managed Endpoint.html#test-endpoint",
+    "title": "Deploying models to Azure Managed Endpoints using Azure Machine Learning",
+    "section": "3. Test endpoint",
+    "text": "3. Test endpoint\nGrab API key from Azure Machine Learning Studio/Endpoints/&lt;name&gt;/Consume\n\nuri = client.online_endpoints.get(name=\"sample-model-endpoint\").scoring_uri\nkey = \"\"\n\n\nimport requests\nimport json\nimport numpy as np\n\ninput_payload = json.dumps({\n    'data': np.load(\"../data/diabetes.npz\")[\"X_test\"][:2].tolist(),\n})\n\nrequests.post(uri, input_payload, headers={\n    'Content-Type':'application/json', \n    'Authorization':('Bearer '+key)\n}).json()\n\n'[230.86996560914233, 241.27351292981544]'"
+  },
+  {
+    "objectID": "notebooks/01 - Deploy Azure Managed Endpoint.html#delete",
+    "href": "notebooks/01 - Deploy Azure Managed Endpoint.html#delete",
+    "title": "Deploying models to Azure Managed Endpoints using Azure Machine Learning",
+    "section": "4. Delete",
+    "text": "4. Delete\n\nclient.online_endpoints.begin_delete(name=\"sample-model-endpoint\")\n\n\n!rm -r files\n\n....................................."
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Azure ML Deployment Methods",
+    "section": "",
+    "text": "This repo demonstrates different quick ML deployment methods on Azure.\nAnyone needing to deploy using Azure can pick the most suitable deployment method and use the sample code here to by swapping in their model. Each notebook takes the model and deploys it to an endpoint hosted in Azure cloud for real-time inference. We show a range of lightweight methods using various Azure cloud model hosting and deployment tools:\nA sample model ready for deployment is provided in the models folder. This model simulates a model in a production setting coming from:"
+  },
+  {
+    "objectID": "index.html#get-started",
+    "href": "index.html#get-started",
+    "title": "Azure ML Deployment Methods",
+    "section": "Get started",
+    "text": "Get started\n\nCreate environment: python -m venv venv && source venv/Scripts/activate\nInstall requirements: pip install -r requirements.txt\nSetup Azure CLI: sudo apt-get install --only-upgrade azure-cli; az login"
+  },
+  {
+    "objectID": "index.html#model-tracking",
+    "href": "index.html#model-tracking",
+    "title": "Azure ML Deployment Methods",
+    "section": "Model tracking",
+    "text": "Model tracking\nModels can be tracked using Azure Machine Learning studio (TODO insert link) and can be registered or downloaded as appropriate at any time. Alternatively, you can use an external MLFlow (TODO insert link) model tracking workspace. However, at time of writing there is no support for deploying models from an external MLFlow to Azure. Note that, at time of writing, you can use mlflow.deployments via the azureml-mlflow plugin to wrap MLFlow syntax around deploying an Azure Machine Learning workspace-tracked model to Azure Managed Endpoints, which is the same method as (1). See this article for latest MLFlow support."
+  },
+  {
+    "objectID": "index.html#model-deployment",
+    "href": "index.html#model-deployment",
+    "title": "Azure ML Deployment Methods",
+    "section": "Model deployment",
+    "text": "Model deployment\n\n1. Deploy to Azure Managed Endpoints\nSee notebook 01 - Deploy Azure Managed Endpoint\nThis registers a ML model in the Azure Machine Learning workspace (TODO add link) and deploys it to Azure Managed Endpoints using the Azure Machine Learning Python SDKTODO: add link. Note that Azure Machine Learning is fairly expensive. Notes:\n\nThis uses the azure-ai-ml Python SDK v2 for interacting with Azure Machine Learning. This is the most up-to-date method and deprecates using azureml-core.\nDirect deployment from Azure Machine Learning to Azure Container Instances (ACI) is deprecated, see this blog for info.\n\n\n\n2. Deploy to Azure Function App - serverless approach\nSee notebook 02 - Deploy Azure Function App\nThis containerises a ML model and deploys to an Azure Function App, which is a cheaper and lightweight serverless way of exposing a model to an inference endpoint.\n\n\n3. Deploy to Azure Container Instances with custom container (BYOC)\nSee notebook 03 - Deploy Azure Container Instance\nThis gives the most flexibility without creating a dedicated compute instance. The model, inference script and API endpoint are all bundled into a Docker image, so that scoring, environment, load balancing can all be configured in the image. The image is pushed to Azure Container Registry (ACR) and deployed with Azure Container Instances (ACI).\n\n\n4. Deploy to Azure App Service\ntutorial\n\n\n5. Deploy to Azure Kubernetes Service\nAzure Kubernetes endpoint with AKS (sample), more inspiration"
+  },
+  {
+    "objectID": "index.html#development",
+    "href": "index.html#development",
+    "title": "Azure ML Deployment Methods",
+    "section": "Development",
+    "text": "Development\n\nRender docs: cp README.md index.qmd && quarto render"
+  },
+  {
+    "objectID": "notebooks/02 - Deploy Azure Function App.html",
+    "href": "notebooks/02 - Deploy Azure Function App.html",
+    "title": "Deploy to Azure Function App - serverless approach",
+    "section": "",
+    "text": "Following this tutorial.\nSteps:\nModel to be deployed:\nmodel_path = \"../../models/model.pkl\"\nresource_group = \"azure-cognitive-services-accelerator\""
+  },
+  {
+    "objectID": "notebooks/02 - Deploy Azure Function App.html#setup",
+    "href": "notebooks/02 - Deploy Azure Function App.html#setup",
+    "title": "Deploy to Azure Function App - serverless approach",
+    "section": "1. Setup",
+    "text": "1. Setup\n\n1.1 Setup Azure Functions CLI\nInstall Azure Functions CLI package following the docs (you may need xcode-select --install too):\n\n!brew tap azure/functions\n\n\n!brew install azure-functions-core-tools@4\n\n\n\n1.2 Setup location Azure Function\nInitialise local function project folder:\n\n!func init sample_project --python\n\n\n%cd sample_project\n\nCreate new function that is triggered by HTTP:\n\n!func new --name sample_endpoint --template \"HTTP trigger\" --authlevel \"anonymous\" --worker-runtime python\n\nCopy scikit-learn model and add inferencing script + dependencies. Make sure scikit-learn is same version in which model was created otherwise may get compatibility errors (e.g. see here for common scikit-learn error and see here for a python3.8 vs 3.9 issue for older sklearn versions)\n\n!cp $model_path sample_endpoint\n\n\n%%writefile -a requirements.txt\n\nscikit-learn==1.2.0\n\n\n%%writefile sample_endpoint/__init__.py\nimport azure.functions as func\nimport numpy as np\nimport logging, sklearn, joblib, json\n\ndef main(req: func.HttpRequest) -&gt; func.HttpResponse:\n    logging.info(sklearn.__version__) # check this matches sklearn version in which model was trained\n    pred = joblib.load('sample_endpoint/model.pkl').predict(np.array(req.get_json()['data']))\n    return func.HttpResponse(json.dumps({\"prediction\": pred.tolist()}))\n\nOptional: test model locally using func start in a new terminal and query local API with requests in Test section below.\n\n\n1.3 Create resources: Azure Function App and Storage Account\nCreate storage account under appropriate resource group (ideally keep all assets under same resource group for cost tracking).\nNote that storage account and function app can’t include _ in their names, and function app creation fails silently if you don’t follow this.\n\n!az storage account create --name sampleprojectstorage --resource-group $resource_group --sku Standard_LRS\n\nCreate function app under same resource group and location. Check that runtime-version is the same as python version in which model was created/compatible with the sklearn version.\n\n!az functionapp create --resource-group $resource_group --consumption-plan-location uksouth --runtime python --runtime-version 3.10 --functions-version 4 --name sampleprojectapp --os-type linux --storage-account sampleprojectstorage\n\nUse !az functionapp update --resource-group $resource_group --name sample_project to rerun the above command."
+  },
+  {
+    "objectID": "notebooks/02 - Deploy Azure Function App.html#deploy-model",
+    "href": "notebooks/02 - Deploy Azure Function App.html#deploy-model",
+    "title": "Deploy to Azure Function App - serverless approach",
+    "section": "2. Deploy model",
+    "text": "2. Deploy model\nPublish function app (i.e. deploy). If first time results in Deploy Failed, just try rerunning the command (shrugs shoulders). Take note of the invoke URL at the end for API queries.\n\n!func azure functionapp publish sampleprojectapp\n\n\nendpoint_url = \"https://sampleprojectapp.azurewebsites.net/api/sample_endpoint\""
+  },
+  {
+    "objectID": "notebooks/02 - Deploy Azure Function App.html#test-endpoint",
+    "href": "notebooks/02 - Deploy Azure Function App.html#test-endpoint",
+    "title": "Deploy to Azure Function App - serverless approach",
+    "section": "3. Test endpoint",
+    "text": "3. Test endpoint\nYou can manage and monitor the logs of the function app on the Azure portal under Function App.\n\nimport requests\nimport json\nimport numpy as np\n\ninput_payload = json.dumps({\n    'data': np.load(\"../../data/diabetes.npz\")[\"X_test\"][:2].tolist(),\n})\n\nrequests.post(endpoint_url, input_payload, headers={'Content-Type':'application/json'}).json()"
+  },
+  {
+    "objectID": "notebooks/02 - Deploy Azure Function App.html#delete-endpoint",
+    "href": "notebooks/02 - Deploy Azure Function App.html#delete-endpoint",
+    "title": "Deploy to Azure Function App - serverless approach",
+    "section": "4. Delete endpoint",
+    "text": "4. Delete endpoint\nDelete created resources. Or you could do this in Azure portal.\n\n!az functionapp delete --name sampleprojectapp --resource-group $resource_group\n\n\n!az storage account delete --name sampleprojectstorage --resource-group $resource_group -y\n\nOptional: delete local files\n\n%cd ..\n\n\n!rm -r sample_project"
+  },
+  {
+    "objectID": "models/sample_download_mlflow_model.html",
+    "href": "models/sample_download_mlflow_model.html",
+    "title": "Sample model: download from external MLFLow",
+    "section": "",
+    "text": "Download a model tracked in an external MLFlow. This is currently the only way to get a model from an external model registry into Azure deployment.\n\nimport mlflow\nimport joblib, os\n\nIf needed, set AWS credentials in local environment to access MLFlow on AWS\n\n#os.environ[\"AWS_ACCESS_KEY_ID\"] = \"\"\n#os.environ[\"AWS_SECRET_ACCESS_KEY\"] = \"\"\n\n\nmlflow.set_tracking_uri(\"http://andre-mlflo-a3oi3g4g7sh1-6b98eef0c99b7004.elb.eu-central-1.amazonaws.com\")\nmodel = mlflow.sklearn.load_model(f\"models:/diabetes/1\")\n\njoblib.dump(model, \"model.pkl\")"
+  }
+]

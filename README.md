@@ -1,4 +1,6 @@
-# Azure ML Deployment Methods
+---
+title: "Azure ML Deployment Methods"
+---
 
 This repo demonstrates different quick ML deployment methods on Azure.
 
@@ -17,9 +19,9 @@ A sample model ready for deployment is provided in the `models` folder. This mod
 
 ## Get started
 
-`sudo apt-get install --only-upgrade azure-cli`
-
-`az login`
+- Create environment: `python -m venv venv && source venv/Scripts/activate`
+- Install requirements: `pip install -r requirements.txt`
+- Setup Azure CLI: `sudo apt-get install --only-upgrade azure-cli`; `az login`
 
 ## Model tracking
 
@@ -29,7 +31,7 @@ Models can be tracked using Azure Machine Learning studio (**TODO** insert link)
 
 ### 1. Deploy to Azure Managed Endpoints
 
-See notebook [01 - Deploy Azure Managed Endpoint](01%20-%20Deploy%20Azure%20Managed%20Endpoint/demo.ipynb)
+See notebook [01 - Deploy Azure Managed Endpoint](notebooks/01%20-%20Deploy%20Azure%20Managed%20Endpoint.ipynb)
 
 This registers a ML model in the Azure Machine Learning workspace (**TODO** add link) and deploys it to [Azure Managed Endpoints](https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints#managed-online-endpoints-vs-kubernetes-online-endpoints) using the [Azure Machine Learning Python SDK]()**TODO**: add link. Note that Azure Machine Learning is fairly expensive. Notes: 
 
@@ -39,13 +41,13 @@ This registers a ML model in the Azure Machine Learning workspace (**TODO** add 
 
 ### 2. Deploy to Azure Function App - serverless approach
 
-See notebook [02 - Deploy Azure Function App](02%20-%20Deploy%20Azure%20Function%20App/demo.ipynb)
+See notebook [02 - Deploy Azure Function App](notebooks/02%20-%20Deploy%20Azure%20Function%20App.ipynb)
 
 This containerises a ML model and deploys to an Azure Function App, which is a cheaper and lightweight serverless way of exposing a model to an inference endpoint.
 
 ### 3. Deploy to Azure Container Instances with custom container (BYOC)
 
-See notebook [03 - Deploy Azure Container Instance](03%20-%20Deploy%20Azure%20Container%20Instance/demo.ipynb)
+See notebook [03 - Deploy Azure Container Instance](notebooks/03%20-%20Deploy%20Azure%20Container%20Instance.ipynb)
 
 This gives the most flexibility without creating a dedicated compute instance. The model, inference script and API endpoint are all bundled into a Docker image, so that scoring, environment, load balancing can all be configured in the image. The image is pushed to Azure Container Registry (ACR) and deployed with Azure Container Instances (ACI).
 
@@ -56,3 +58,7 @@ This gives the most flexibility without creating a dedicated compute instance. T
 ### 5. Deploy to Azure Kubernetes Service
 
 [Azure Kubernetes endpoint](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere) with AKS ([sample](https://github.com/Azure/azureml-examples/blob/main/sdk/python/endpoints/online/kubernetes/kubernetes-online-endpoints-simple-deployment.ipynb)), [more inspiration](https://learn.microsoft.com/en-us/azure/architecture/reference-architectures/ai/real-time-scoring-machine-learning-models?source=recommendations) 
+
+## Development
+
+- Render docs: `cp README.md index.qmd && quarto render`

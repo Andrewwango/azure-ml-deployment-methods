@@ -1,0 +1,37 @@
+project:
+  type: website
+  output-dir: docs
+  render: 
+    - index.qmd
+    - notebooks/*.ipynb
+    - models/*.ipynb
+    - "!notebooks/OLD*.ipynb"
+
+website:
+  title: "Azure ML Deployment Methods"
+  sidebar:
+    style: "docked"
+    search: true
+    contents:
+      - href: index.qmd
+        text: Home
+      - section: "Model"
+        contents:
+        - href: "models/sample_train_diabetes_model.ipynb"
+          text: "a. Train sample model"
+        - href: "models/sample_download_mlflow_model.ipynb"
+          text: "b. Download model from MLFlow"
+      - section: "Deploy"
+        contents:
+        - href: "notebooks/01 - Deploy Azure Managed Endpoint.ipynb"
+          text: "1. Deploy Azure Managed Endpoint"
+        - href: "notebooks/02 - Deploy Azure Function App.ipynb"
+          text: "2. Deploy Azure Function App"
+        - href: "notebooks/03 - Deploy Azure container instance.ipynb"
+          text: "3. Deploy Azure container instance"
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true
